@@ -6,274 +6,339 @@
     <title>期末词语复习系统</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 强制调用 iPad 楷体 */
-        body {
-            font-family: "Kaiti SC", "STKaiti", "楷体", serif;
-            -webkit-tap-highlight-color: transparent; /* 消除 iPad 点击高亮 */
+        /* 针对 Safari 和 iOS 的楷体优化 */
+        body { 
+            font-family: "Kaiti SC", "STKaiti", "楷体", "KaiTi", serif; 
+            background-color: #f0f4f8; 
+            -webkit-font-smoothing: antialiased; 
+            user-select: none;
         }
         .hidden { display: none; }
-        .card { transition: all 0.2s ease; }
-        /* 针对 iPad 按钮优化 */
-        button { touch-action: manipulation; }
-        /* 楷体大号字显示 */
-        .kaiti-text { font-family: "Kaiti SC", "STKaiti", "楷体", serif; }
+        .kaiti { font-family: "Kaiti SC", "STKaiti", "楷体", "KaiTi", serif; }
+        .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        
+        /* 听写大字样式 */
+        #correct-word { font-size: 5.5rem; line-height: 1.2; font-weight: 500; }
+        
+        /* 连线挑战交互样式 */
+        .match-item { 
+            cursor: pointer; 
+            transition: all 0.2s; 
+            border: 2px solid transparent; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            text-align: center;
+            overflow: hidden;
+        }
+        .match-selected { border-color: #4f46e5; background-color: #eef2ff; transform: scale(1.02); z-index: 10; shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .match-correct { visibility: hidden; opacity: 0; pointer-events: none; transition: opacity 0.3s, visibility 0.3s; }
+        .match-wrong { border-color: #ef4444; background-color: #fef2f2; animation: shake 0.4s; }
+        
+        @keyframes shake { 
+            0%, 100% { transform: translateX(0); } 
+            25% { transform: translateX(-5px); } 
+            75% { transform: translateX(5px); } 
+        }
+
+        .btn-active:active { transform: scale(0.95); transition: 0.1s; }
+        .wrong-tag { 
+            background: #fff1f2; 
+            border: 1px solid #fecdd3; 
+            color: #e11d48; 
+            padding: 4px 12px; 
+            border-radius: 8px; 
+            display: inline-block; 
+            margin: 4px; 
+            font-size: 1.1rem; 
+        }
     </style>
 </head>
-<body class="bg-stone-50 min-h-screen text-slate-800">
+<body class="min-h-screen text-slate-800 pb-10">
 
-    <div id="app" class="max-w-2xl mx-auto p-6">
+    <div id="app" class="max-w-2xl mx-auto p-4">
         <!-- 头部 -->
         <header class="text-center py-6">
-            <h1 class="text-4xl font-bold text-blue-700 kaiti-text">期末词语复习助手</h1>
-            <p id="user-info-display" class="mt-2 text-slate-500"></p>
+            <h1 class="text-3xl font-bold text-indigo-700 kaiti">期末词语复习</h1>
+            <p id="user-info" class="text-slate-500 mt-1 text-sm italic sans"></p>
         </header>
 
         <!-- 1. 登录模块 -->
-        <section id="login-section" class="bg-white p-10 rounded-3xl shadow-xl text-center border border-stone-200">
-            <h2 class="text-2xl mb-6 font-semibold kaiti-text">请输入学生姓名</h2>
-            <input type="text" id="username-input" class="border-2 border-blue-100 rounded-xl px-4 py-3 w-full max-w-xs text-center text-xl focus:border-blue-500 outline-none mb-6" placeholder="姓名">
-            <br>
-            <button onclick="login()" class="bg-blue-600 text-white px-10 py-4 rounded-2xl text-xl font-bold hover:bg-blue-700 active:scale-95 transition w-full max-w-xs">进入系统</button>
+        <section id="login-section" class="bg-white p-8 rounded-3xl shadow-xl text-center">
+            <h2 class="text-xl mb-6 kaiti font-bold">输入姓名开启复习</h2>
+            <input type="text" id="username-input" class="border-2 border-indigo-100 rounded-2xl px-4 py-3 w-full max-w-xs text-center text-lg outline-none focus:border-indigo-500 transition-all" placeholder="姓名">
+            <button onclick="login()" class="mt-8 block mx-auto bg-indigo-600 text-white px-16 py-4 rounded-2xl font-bold btn-active shadow-lg shadow-indigo-200">开始复习</button>
         </section>
 
-        <!-- 2. 主菜单 -->
-        <section id="menu-section" class="hidden space-y-6">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
-                <h3 class="font-bold mb-4 text-lg kaiti-text text-slate-400">选择复习课文</h3>
-                <div id="lesson-buttons" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+        <!-- 2. 主菜单模块 -->
+        <section id="menu-section" class="hidden space-y-4">
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-50">
+                <h3 class="text-slate-400 text-xs mb-4 tracking-widest uppercase font-bold text-center sans">课文单元复习</h3>
+                <div id="lesson-buttons" class="grid grid-cols-1 gap-3"></div>
             </div>
-            <button onclick="showWrongWords()" class="w-full bg-orange-50 text-orange-700 p-6 rounded-2xl font-bold border-2 border-orange-200 active:scale-95 transition flex justify-between items-center">
-                <span class="kaiti-text text-xl">错词强化库</span>
-                <span id="wrong-count" class="bg-orange-600 text-white px-4 py-1 rounded-full text-sm">0</span>
-            </button>
-        </section>
-
-        <!-- 3. 浏览模块 -->
-        <section id="browse-section" class="hidden">
-            <div class="flex justify-between items-center mb-6">
-                <button onclick="showMenu()" class="text-blue-600 text-lg font-bold">← 返回</button>
-                <h2 id="browse-title" class="text-2xl font-bold kaiti-text"></h2>
-            </div>
-            <div id="word-cards" class="space-y-4 mb-24"></div>
-            <!-- 固定在底部的按钮 -->
-            <div class="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-stone-50 via-stone-50 to-transparent">
-                <button onclick="startDictation()" class="max-w-2xl mx-auto w-full bg-green-600 text-white py-5 rounded-2xl font-bold shadow-2xl text-xl active:scale-95 transition kaiti-text">
-                    开始听写
-                </button>
-            </div>
-        </section>
-
-        <!-- 4. 听写模块 (纸笔模式) -->
-        <section id="dictation-section" class="hidden bg-white p-8 rounded-3xl shadow-2xl text-center border border-stone-100">
-            <div class="mb-6">
-                <span id="progress-tag" class="text-sm bg-slate-100 px-4 py-1 rounded-full text-slate-500 font-mono"></span>
-                <div class="text-7xl my-10 animate-pulse">🎧</div>
-                <button onclick="speakCurrentWord()" class="bg-blue-50 text-blue-600 px-8 py-3 rounded-full font-bold active:bg-blue-100 mb-4">
-                    🔊 再次播放
-                </button>
-                <p class="text-slate-400 kaiti-text">请在纸上书写...</p>
-            </div>
-
-            <div id="answer-area" class="hidden border-t-2 border-dashed pt-8 mt-8">
-                <div class="text-6xl font-bold text-slate-900 mb-4 kaiti-text" id="correct-word"></div>
-                <div class="text-2xl text-blue-500 mb-4 font-mono" id="correct-pinyin"></div>
-                <div class="text-slate-500 text-lg kaiti-text px-4" id="correct-meaning"></div>
-            </div>
-
-            <div class="flex flex-col gap-4 mt-10">
-                <button id="show-answer-btn" onclick="showAnswer()" class="bg-slate-800 text-white py-5 rounded-2xl text-xl kaiti-text font-bold shadow-lg">核对答案</button>
-                <div id="judge-buttons" class="hidden grid grid-cols-2 gap-4">
-                    <button onclick="handleResult(true)" class="bg-green-500 text-white py-5 rounded-2xl text-xl font-bold kaiti-text shadow-lg">写对了</button>
-                    <button onclick="handleResult(false)" class="bg-red-500 text-white py-5 rounded-2xl text-xl font-bold kaiti-text shadow-lg">写错了</button>
+            
+            <div class="bg-indigo-900 p-6 rounded-3xl shadow-xl text-white">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="kaiti text-xl">错词强化中心</h3>
+                    <span id="wrong-count" class="bg-indigo-500 px-3 py-1 rounded-full text-xs sans">0</span>
+                </div>
+                <div class="grid grid-cols-1 gap-3">
+                    <button onclick="startWrongDictation('paper')" class="bg-white/10 hover:bg-white/20 p-4 rounded-xl text-left flex justify-between items-center transition btn-active">
+                        <span>📝 纸笔听写模式 (随机)</span>
+                        <span class="text-xs opacity-60 sans">手动校对</span>
+                    </button>
+                    <button onclick="startWrongDictation('check')" class="bg-white/10 hover:bg-white/20 p-4 rounded-xl text-left flex justify-between items-center transition btn-active">
+                        <span>⌨️ 看拼音填词 (系统校验)</span>
+                        <span class="text-xs opacity-60 sans">打字练习</span>
+                    </button>
                 </div>
             </div>
         </section>
 
-        <!-- 5. 反馈报告 -->
-        <section id="report-section" class="hidden bg-white p-8 rounded-3xl shadow-xl border-4 border-blue-50">
-            <h2 class="text-3xl font-bold text-center mb-8 kaiti-text text-blue-800">复习反馈报告</h2>
-            <div id="report-content" class="space-y-4 text-lg kaiti-text bg-blue-50 p-6 rounded-2xl"></div>
-            
-            <div id="medal-area" class="my-8 p-6 bg-orange-50 rounded-2xl text-center border-2 border-orange-200 hidden">
-                <div class="text-6xl mb-2">🏅</div>
-                <div class="font-bold text-orange-700 text-2xl kaiti-text">持之以恒勋章</div>
-                <p class="text-orange-600 text-sm mt-1">达成连续 4 天复习目标！</p>
+        <!-- 3. 词语浏览模块 -->
+        <section id="browse-section" class="hidden space-y-4">
+            <div class="flex justify-between items-center px-2">
+                <button onclick="showMenu()" class="text-indigo-600 font-bold kaiti">← 返回</button>
+                <h2 id="browse-title" class="text-xl font-bold kaiti text-slate-700"></h2>
             </div>
+            <div id="browse-container" class="space-y-3"></div>
+            <button onclick="startMatching()" class="w-full mt-6 bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg btn-active kaiti shadow-lg">浏览完毕，进入连线挑战</button>
+        </section>
+
+        <!-- 4. 连线挑战模块 -->
+        <section id="matching-section" class="hidden space-y-4">
+            <div class="text-center mb-4">
+                <h2 class="text-xl font-bold kaiti text-indigo-800">词义连连看挑战</h2>
+                <p class="text-xs text-slate-400 sans">点击左侧词语，再点击右侧对应解释 (成功将自动朗读)</p>
+            </div>
+            <div class="grid grid-cols-2 gap-4 items-stretch">
+                <div id="match-words-col" class="space-y-3"></div>
+                <div id="match-meanings-col" class="space-y-3"></div>
+            </div>
+            <div id="match-done-area" class="hidden pt-6">
+                <div class="text-center text-green-600 font-bold mb-4 animate-bounce kaiti">✨ 挑战成功！准备正式听写 ✨</div>
+                <button onclick="prepareDictationFromMatch()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg btn-active kaiti shadow-xl">开始正式听写</button>
+            </div>
+        </section>
+
+        <!-- 5. 正式听写模块 (纸笔模式) -->
+        <section id="dictation-section" class="hidden bg-white p-8 rounded-3xl shadow-2xl text-center relative overflow-hidden">
+            <div id="progress-bar" class="absolute top-0 left-0 h-1 bg-indigo-500 transition-all" style="width: 0%"></div>
+            <div class="mb-4 text-slate-300 text-xs sans" id="progress-text"></div>
             
-            <button onclick="showMenu()" class="w-full mt-6 bg-blue-600 text-white py-5 rounded-2xl text-xl font-bold kaiti-text shadow-lg">完成复习</button>
+            <div class="py-10">
+                <button onclick="speakCurrentWord()" class="w-28 h-28 bg-indigo-50 text-indigo-600 rounded-full text-5xl shadow-inner btn-active">🔊</button>
+                <p class="mt-6 text-slate-400 kaiti">请在纸上听写...</p>
+            </div>
+
+            <div id="answer-area" class="hidden border-t border-slate-100 pt-8">
+                <div id="correct-word" class="kaiti text-slate-900"></div>
+                <div id="correct-pinyin" class="text-indigo-500 text-2xl sans mt-2 tracking-wide"></div>
+                <div id="correct-meaning" class="text-slate-400 text-sm mt-4 italic kaiti px-4"></div>
+            </div>
+
+            <div class="mt-10 flex flex-col gap-4">
+                <button id="show-answer-btn" onclick="showAnswer()" class="bg-slate-800 text-white py-4 rounded-2xl font-bold btn-active shadow-lg">核对答案</button>
+                <div id="judge-btns" class="hidden grid grid-cols-2 gap-4">
+                    <button onclick="handleResult(true)" class="bg-emerald-500 text-white py-4 rounded-2xl font-bold btn-active shadow-lg">我写对了</button>
+                    <button onclick="handleResult(false)" class="bg-rose-500 text-white py-4 rounded-2xl font-bold btn-active shadow-lg">写错了</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6. 听写模块 (系统校验模式) -->
+        <section id="check-section" class="hidden bg-white p-8 rounded-3xl shadow-2xl text-center">
+            <div class="mb-6 text-indigo-500 text-2xl font-bold sans" id="check-pinyin"></div>
+            <input type="text" id="check-input" class="w-full border-b-4 border-slate-100 text-4xl text-center kaiti py-4 outline-none focus:border-indigo-500 transition-all" placeholder="输入词语" autocomplete="off">
+            <div id="check-feedback" class="h-8 mt-4 font-bold sans"></div>
+            <button onclick="verifyCheckAnswer()" class="w-full mt-8 bg-indigo-600 text-white py-4 rounded-2xl font-bold btn-active">提交校对</button>
+        </section>
+
+        <!-- 7. 反馈报告模块 -->
+        <section id="report-section" class="hidden bg-white p-8 rounded-3xl shadow-xl">
+            <div id="report-header" class="text-center mb-6 border-b pb-4"></div>
+            <div id="report-stats" class="grid grid-cols-3 gap-4 mb-6"></div>
+            
+            <div id="wrong-list-area" class="mb-8 p-4 bg-slate-50 rounded-2xl text-left">
+                <h3 class="text-sm font-bold text-slate-500 mb-3 kaiti">本次写错（请在纸上二次练习）：</h3>
+                <div id="wrong-tags-container" class="flex flex-wrap"></div>
+            </div>
+
+            <div id="medal-area" class="hidden mb-8 bg-amber-50 p-6 rounded-2xl border-2 border-amber-100 text-center">
+                <div class="text-6xl mb-2 animate-bounce">🏅</div>
+                <div class="text-amber-800 font-bold text-xl kaiti">持之以恒勋章</div>
+                <p class="text-amber-600 text-xs mt-1 sans">恭喜！你已连续复习 4 天！</p>
+            </div>
+            <button onclick="showMenu()" class="w-full bg-slate-800 text-white py-4 rounded-2xl font-bold btn-active">完成复习</button>
         </section>
     </div>
 
 <script>
-// 数据与逻辑保持一致 (略有精简拼音和解释)
+// --- 核心词库数据 ---
 const wordData = [
-    {
-        lesson: "《窗》",
-        words: [
-            {word: "窄小", pinyin: "zhǎi xiǎo", meaning: "狭小。"},
-            {word: "水准", pinyin: "shuǐ zhǔn", meaning: "水平。"},
-            {word: "扣人心弦", pinyin: "kòu rén xīn xián", meaning: "形容事物激动人心。"},
-            {word: "消遣", pinyin: "xiāo qiǎn", meaning: "寻找快乐，打发空闲。"},
-            {word: "俯瞰", pinyin: "fǔ kàn", meaning: "从高处往下看。"},
-            {word: "一泓", pinyin: "yī hóng", meaning: "形容水清澈，也指一汪水。"},
-            {word: "五彩斑斓", pinyin: "wǔ cǎi bān lán", meaning: "形容色彩非常绚丽。"},
-            {word: "争相斗艳", pinyin: "zhēng xiāng dòu yàn", meaning: "竞相展示形色之美。"},
-            {word: "摸索", pinyin: "mō suǒ", meaning: "探索；试着寻找。"},
-            {word: "漱洗", pinyin: "shù xǐ", meaning: "刷牙和洗脸。"},
-            {word: "栩栩如生", pinyin: "xǔ xǔ rú shēng", meaning: "指艺术形象非常逼真。"},
-            {word: "气喘吁吁", pinyin: "qì chuǎn xū xū", meaning: "形容呼吸急促的样子。"}
-        ]
-    },
-    {
-        lesson: "《带上她的眼睛》",
-        words: [
-            {word: "点缀", pinyin: "diǎn zhuì", meaning: "加以衬托或装饰。"},
-            {word: "漫步", pinyin: "màn bù", meaning: "悠闲地随意行走。"},
-            {word: "迟钝", pinyin: "chí dùn", meaning: "反应慢，不灵敏。"},
-            {word: "蒙眬", pinyin: "méng lóng", meaning: "物像模糊，不清楚。"},
-            {word: "闲暇", pinyin: "xián xiá", meaning: "闲空。"},
-            {word: "凸现", pinyin: "tū xiàn", meaning: "清楚地显现。"},
-            {word: "拍摄", pinyin: "pāi shè", meaning: "用设备记录人或景物。"},
-            {word: "蔚蓝", pinyin: "wèi lán", meaning: "像晴朗天空那样的蓝色。"},
-            {word: "合拢", pinyin: "hé lǒng", meaning: "合到一起。"},
-            {word: "吟唱", pinyin: "yín chàng", meaning: "吟咏歌唱。"},
-            {word: "不期而至", pinyin: "bù qī ér zhì", meaning: "事先没有约定而意外到来。"},
-            {word: "心有灵犀", pinyin: "xīn yǒu líng xī", meaning: "指双方心意相通。"},
-            {word: "天涯海角", pinyin: "tān yá hǎi jiǎo", meaning: "形容极远的地方。"},
-            {word: "孤零零", pinyin: "gū líng líng", meaning: "形容孤单，无依无靠。"}
-        ]
-    },
-    {
-        lesson: "《一件小事》",
-        words: [
-            {word: "耳闻目睹", pinyin: "ěr wén mù dǔ", meaning: "亲耳听到，亲眼看见。"},
-            {word: "国家大事", pinyin: "guó jiā dà shì", meaning: "有关国家重大的事务。"},
-            {word: "脾气", pinyin: "pí qi", meaning: "人的性情。"},
-            {word: "浮尘", pinyin: "fú chén", meaning: "空中扬扬洒洒的灰尘。"},
-            {word: "装腔作势", pinyin: "zhuāng qiāng zuò shì", meaning: "故意装出某种姿态。"},
-            {word: "憎恶", pinyin: "zèng wù", meaning: "憎恨；厌恶。"},
-            {word: "自讨苦吃", pinyin: "zì tǎo kǔ chī", meaning: "自己找麻烦。"},
-            {word: "踌躇", pinyin: "chóu chú", meaning: "犹豫不决。"},
-            {word: "异样", pinyin: "yì yàng", meaning: "不寻常；特别。"},
-            {word: "刹时", pinyin: "shà shí", meaning: "极短的时间。"},
-            {word: "仰视", pinyin: "yǎng shì", meaning: "抬头向上看。"},
-            {word: "凝滞", pinyin: "níng zhì", meaning: "停止流动。"},
-            {word: "文治武力", pinyin: "wén zhì wǔ lì", meaning: "指统治者的德政与军功。"},
-            {word: "分明", pinyin: "fēn míng", meaning: "清楚；显然。"},
-            {word: "自新", pinyin: "zì xīn", meaning: "自觉改正错误，重新做人。"}
-        ]
-    },
-    {
-        lesson: "《空城计》",
-        words: [
-            {word: "犹豫不定", pinyin: "yóu yù bù dìng", meaning: "拿不定主意。"},
-            {word: "拍案大惊", pinyin: "pāi àn dà jīng", meaning: "拍桌子非常吃惊。"},
-            {word: "跌足长叹", pinyin: "dié zú cháng tàn", meaning: "跺着脚叹气。"},
-            {word: "呐喊", pinyin: "nà hǎn", meaning: "大声喊叫助威。"},
-            {word: "心腹", pinyin: "xīn fù", meaning: "指亲信。"},
-            {word: "分拨", pinyin: "fēn bō", meaning: "分派；调遣。"},
-            {word: "失色", pinyin: "shī sè", meaning: "因惊恐而变了脸色。"},
-            {word: "尘土冲天", pinyin: "chén tǔ chōng tiān", meaning: "形容尘土飞扬。"},
-            {word: "旌旗", pinyin: "jīng qí", meaning: "旗帜。"},
-            {word: "擅动", pinyin: "shàn dòng", meaning: "擅自行动。"},
-            {word: "鹤氅", pinyin: "hè chǎng", meaning: "用鸟羽毛做的外衣。"},
-            {word: "纶巾", pinyin: "guān jīn", meaning: "青丝制的头巾。"},
-            {word: "凭栏而坐", pinyin: "píng lán ér zuò", meaning: "靠着栏杆坐着。"},
-            {word: "焚香操琴", pinyin: "fén xiāng cāo qín", meaning: "烧香弹琴。"},
-            {word: "笑容可掬", pinyin: "xiào róng kě jū", meaning: "满脸笑容的样子。"},
-            {word: "旁若无人", pinyin: "páng ruò wú rén", meaning: "态度自然或临场不慌。"}
-        ]
-    }
+    { lesson: "《窗》", words: [ {word: "窄小", pinyin: "zhǎi xiǎo", meaning: "狭小。"}, {word: "水准", pinyin: "shuǐ zhǔn", meaning: "水平。"}, {word: "扣人心弦", pinyin: "kòu rén xīn xián", meaning: "形容事物激动人心。"}, {word: "消遣", pinyin: "xiāo qiǎn", meaning: "寻找快乐，打发空闲。"}, {word: "俯瞰", pinyin: "fǔ kàn", meaning: "从高处往下看。"}, {word: "一泓", pinyin: "yī hóng", meaning: "形容水清清澈，指一汪水。"}, {word: "五彩斑斓", pinyin: "wǔ cǎi bān lán", meaning: "形容色彩非常绚丽。"}, {word: "争相斗艳", pinyin: "zhēng xiāng dòu yàn", meaning: "竞相展示形色之美。"}, {word: "摸索", pinyin: "mō suǒ", meaning: "探索；试着寻找。"}, {word: "漱洗", pinyin: "shù xǐ", meaning: "刷牙和洗脸。"}, {word: "栩栩如生", pinyin: "xǔ xǔ rú shēng", meaning: "指艺术形象非常逼真。"}, {word: "气喘吁吁", pinyin: "qì chuǎn xū xū", meaning: "形容呼吸急促的样子。"} ] },
+    { lesson: "《带上她的眼睛》", words: [ {word: "点缀", pinyin: "diǎn zhuì", meaning: "加以衬托或装饰。"}, {word: "漫步", pinyin: "màn bù", meaning: "悠闲地随意行走。"}, {word: "迟钝", pinyin: "chí dùn", meaning: "反应慢，不灵敏。"}, {word: "蒙眬", pinyin: "méng lóng", meaning: "物像模糊，不清楚。"}, {word: "闲暇", pinyin: "xián xiá", meaning: "闲空。"}, {word: "凸现", pinyin: "tū xiàn", meaning: "清楚地显现。"}, {word: "拍摄", pinyin: "pāi shè", meaning: "用摄影设备记录。"}, {word: "蔚蓝", pinyin: "wèi lán", meaning: "像晴朗天空那样的蓝色。"}, {word: "合拢", pinyin: "hé lǒng", meaning: "合到一起。"}, {word: "吟唱", pinyin: "yín chàng", meaning: "吟咏歌唱。"}, {word: "不期而至", pinyin: "bù qī ér zhì", meaning: "事先没有约定而意外到来。"}, {word: "心有灵犀", pinyin: "xīn yǒu líng xī", meaning: "指双方心意相通。"}, {word: "天涯海角", pinyin: "tiān yá hǎi jiǎo", meaning: "形容极远的地方。"}, {word: "孤零零", pinyin: "gū líng líng", meaning: "形容孤单，无依无靠。"} ] },
+    { lesson: "《一件小事》", words: [ {word: "耳闻目睹", pinyin: "ěr wén mù dǔ", meaning: "亲耳听到，亲眼看见。"}, {word: "国家大事", pinyin: "guó jiā dà shì", meaning: "有关国家重大的事务。"}, {word: "脾气", pinyin: "pí qi", meaning: "人的性情。"}, {word: "浮尘", pinyin: "fú chén", meaning: "空中扬扬洒洒的灰尘。"}, {word: "装腔作势", pinyin: "zhuāng qiāng zuò shì", meaning: "故意装出某种腔调。"}, {word: "憎恶", pinyin: "zèng wù", meaning: "憎恨；厌恶。"}, {word: "自讨苦吃", pinyin: "zì tǎo kǔ chī", meaning: "自己找麻烦。"}, {word: "踌躇", pinyin: "chóu chú", meaning: "犹豫不决。"}, {word: "异样", pinyin: "yì yàng", meaning: "不寻常；特别。"}, {word: "刹时", pinyin: "shà shí", meaning: "极短的时间。"}, {word: "仰视", pinyin: "yǎng shì", meaning: "抬头向上看。"}, {word: "凝滞", pinyin: "níng zhì", meaning: "停止流动。"}, {word: "文治武力", pinyin: "wén zhì wǔ lì", meaning: "指统治者的德政与军功。"}, {word: "分明", pinyin: "fēn míng", meaning: "清楚；显然。"}, {word: "自新", pinyin: "zì xīn", meaning: "自觉改正错误。"} ] },
+    { lesson: "《空城计》", words: [ {word: "犹豫不定", pinyin: "yóu yù bù dìng", meaning: "拿不定主意。"}, {word: "拍案大惊", pinyin: "pāi àn dà jīng", meaning: "拍桌子非常吃惊。"}, {word: "跌足长叹", pinyin: "dié zú cháng tàn", meaning: "跺着脚叹气。"}, {word: "呐喊", pinyin: "nà hǎn", meaning: "大声喊叫助威。"}, {word: "心腹", pinyin: "xīn fù", meaning: "指亲信。"}, {word: "分拨", pinyin: "fēn bō", meaning: "分派；调遣。"}, {word: "失色", pinyin: "shī sè", meaning: "因惊恐而变了脸色。"}, {word: "尘土冲天", pinyin: "chén tǔ chōng tiān", meaning: "形容尘土飞扬。"}, {word: "旌旗", pinyin: "jīng qí", meaning: "旗帜。"}, {word: "擅动", pinyin: "shàn dòng", meaning: "擅自行动。"}, {word: "鹤氅", pinyin: "hè chǎng", meaning: "用鸟羽毛做的外衣。"}, {word: "纶巾", pinyin: "guān jīn", meaning: "配有青丝带的头巾。"}, {word: "凭栏而坐", pinyin: "píng lán ér zuò", meaning: "靠着栏杆坐着。"}, {word: "焚香操琴", pinyin: "fén xiāng cāo qín", meaning: "烧香弹琴。"}, {word: "笑容可掬", pinyin: "xiào róng kě jū", meaning: "满脸笑容的样子。"}, {word: "旁若无人", pinyin: "páng ruò wú rén", meaning: "形容态度自然、临场不慌。"} ] }
 ];
 
+// --- 状态管理 ---
 let currentUser = "";
-let currentLesson = null;
+let currentLessonData = null;
 let dictationList = [];
 let currentIndex = 0;
-let sessionResults = { correct: 0, wrong: 0, wrongWords: [] };
+let sessionStats = { correct: 0, wrong: 0, wrongWordObjects: [] };
 let wrongBook = JSON.parse(localStorage.getItem('wrongBook') || '[]');
 
-// 语音初始化（解决 iPad 自动播放限制）
-function initVoice() {
-    const msg = new SpeechSynthesisUtterance('');
-    window.speechSynthesis.speak(msg);
-}
-
+// --- 1. 登录与初始化 ---
 function login() {
-    initVoice(); // 激活语音
-    const input = document.getElementById('username-input').value;
-    if(!input) return;
-    currentUser = input;
-    document.getElementById('user-info-display').innerText = `你好，${currentUser}`;
+    const name = document.getElementById('username-input').value;
+    if(!name) return alert("请输入姓名");
+    currentUser = name;
+    document.getElementById('user-info').innerText = `学生：${currentUser}`;
     document.getElementById('login-section').classList.add('hidden');
     document.getElementById('menu-section').classList.remove('hidden');
-    initMenu();
+    renderMenu();
     updateWrongCount();
+    speak(""); // 激活 Safari 语音引擎
 }
 
-function initMenu() {
+function renderMenu() {
     const container = document.getElementById('lesson-buttons');
     container.innerHTML = '';
-    wordData.forEach((data, index) => {
-        const btn = document.createElement('button');
-        btn.className = "bg-white border-2 border-stone-200 p-6 rounded-2xl active:bg-blue-50 active:border-blue-300 transition kaiti-text text-xl font-bold text-slate-700";
-        btn.innerText = data.lesson;
-        btn.onclick = () => showBrowse(index);
-        container.appendChild(btn);
+    wordData.forEach((item, idx) => {
+        const div = document.createElement('div');
+        div.className = "bg-white p-4 rounded-2xl shadow-sm border border-slate-50 flex justify-between items-center";
+        div.innerHTML = `
+            <span class="kaiti text-lg font-bold">${item.lesson}</span>
+            <button onclick="startBrowse(${idx})" class="bg-indigo-600 text-white px-6 py-2 rounded-xl text-sm font-bold active:scale-90 transition btn-active">开始复习</button>
+        `;
+        container.appendChild(div);
     });
 }
 
-function showBrowse(index) {
-    currentLesson = index === -1 ? currentLesson : wordData[index];
+// --- 2. 词语浏览 ---
+function startBrowse(idx) {
+    currentLessonData = wordData[idx];
     document.getElementById('menu-section').classList.add('hidden');
     document.getElementById('browse-section').classList.remove('hidden');
-    document.getElementById('browse-title').innerText = currentLesson.lesson;
+    document.getElementById('browse-title').innerText = currentLessonData.lesson;
     
-    const container = document.getElementById('word-cards');
+    const container = document.getElementById('browse-container');
     container.innerHTML = '';
-    currentLesson.words.forEach(w => {
+    currentLessonData.words.forEach(w => {
         const card = document.createElement('div');
-        card.className = "bg-white p-5 rounded-2xl shadow-sm flex justify-between items-center border border-stone-100";
+        card.className = "bg-white p-4 rounded-2xl shadow-sm flex justify-between items-center";
         card.innerHTML = `
-            <div onclick="speak('${w.word}')">
-                <div class="text-2xl font-bold kaiti-text">${w.word} <span class="text-sm font-normal text-blue-400 font-mono">${w.pinyin}</span></div>
-                <div class="text-slate-400 text-sm kaiti-text mt-1">${w.meaning}</div>
+            <div class="flex-1">
+                <div class="text-xl font-bold kaiti">${w.word} <span class="text-indigo-500 text-sm font-sans ml-2 tracking-wider">${w.pinyin}</span></div>
+                <div class="text-slate-400 text-xs mt-1 italic kaiti">${w.meaning}</div>
             </div>
-            <button onclick="speak('${w.word}')" class="text-3xl p-2 active:scale-125 transition">🔊</button>
+            <button onclick="speak('${w.word}', 0.6)" class="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-xl">🔊</button>
         `;
         container.appendChild(card);
     });
     window.scrollTo(0,0);
 }
 
-function startDictation() {
-    dictationList = [...currentLesson.words].sort(() => Math.random() - 0.5);
-    currentIndex = 0;
-    sessionResults = { correct: 0, wrong: 0, wrongWords: [] };
+// --- 3. 连线挑战 ---
+let selectedWord = null;
+let selectedMeaning = null;
+let matchedCount = 0;
+
+function startMatching() {
     document.getElementById('browse-section').classList.add('hidden');
-    document.getElementById('dictation-section').classList.remove('hidden');
-    showNextWord();
+    document.getElementById('matching-section').classList.remove('hidden');
+    document.getElementById('match-done-area').classList.add('hidden');
+    
+    const words = [...currentLessonData.words].sort(() => Math.random() - 0.5);
+    const meanings = [...currentLessonData.words].sort(() => Math.random() - 0.5);
+    
+    const wordsCol = document.getElementById('match-words-col');
+    const meaningsCol = document.getElementById('match-meanings-col');
+    wordsCol.innerHTML = ''; meaningsCol.innerHTML = ''; matchedCount = 0;
+
+    words.forEach(w => {
+        const div = document.createElement('div');
+        div.className = "bg-white p-3 rounded-xl shadow-sm text-center kaiti text-lg match-item border-2 h-20 px-2";
+        div.innerText = w.word;
+        div.onclick = () => selectItem(div, 'word', w.word);
+        wordsCol.appendChild(div);
+    });
+
+    meanings.forEach(m => {
+        const div = document.createElement('div');
+        div.className = "bg-white p-3 rounded-xl shadow-sm text-xs kaiti match-item border-2 h-20 leading-tight px-2";
+        div.innerText = m.meaning;
+        div.onclick = () => selectItem(div, 'meaning', m.word);
+        meaningsCol.appendChild(div);
+    });
 }
 
-function showNextWord() {
+function selectItem(el, type, val) {
+    if (el.classList.contains('match-correct')) return;
+    const colId = type === 'word' ? 'match-words-col' : 'match-meanings-col';
+    document.getElementById(colId).querySelectorAll('.match-item').forEach(i => i.classList.remove('match-selected', 'match-wrong'));
+    el.classList.add('match-selected');
+    
+    if (type === 'word') selectedWord = { el, val };
+    else selectedMeaning = { el, val };
+
+    if (selectedWord && selectedMeaning) {
+        if (selectedWord.val === selectedMeaning.val) {
+            selectedWord.el.classList.add('match-correct');
+            selectedMeaning.el.classList.add('match-correct');
+            // 成功匹配自动朗读
+            speak(selectedWord.val, 0.5, 1.1);
+            matchedCount++;
+            if (matchedCount === currentLessonData.words.length) {
+                document.getElementById('match-done-area').classList.remove('hidden');
+            }
+        } else {
+            selectedWord.el.classList.add('match-wrong');
+            selectedMeaning.el.classList.add('match-wrong');
+        }
+        selectedWord = null; selectedMeaning = null;
+    }
+}
+
+// --- 4. 听写逻辑 (纸笔/系统校验) ---
+function prepareDictationFromMatch() {
+    dictationList = [...currentLessonData.words].sort(() => Math.random() - 0.5);
+    startPaperDictation();
+}
+
+function startPaperDictation() {
+    currentIndex = 0;
+    sessionStats = { correct: 0, wrong: 0, wrongWordObjects: [] };
+    document.getElementById('matching-section').classList.add('hidden');
+    document.getElementById('menu-section').classList.add('hidden');
+    document.getElementById('dictation-section').classList.remove('hidden');
+    showNextPaper();
+}
+
+function startWrongDictation(targetMode) {
+    if(wrongBook.length === 0) return alert("错词库是空的！");
+    dictationList = [...wrongBook].sort(() => Math.random() - 0.5);
+    currentIndex = 0;
+    sessionStats = { correct: 0, wrong: 0, wrongWordObjects: [] };
+    document.getElementById('menu-section').classList.add('hidden');
+    if(targetMode === 'paper') {
+        document.getElementById('dictation-section').classList.remove('hidden');
+        showNextPaper();
+    } else {
+        document.getElementById('check-section').classList.remove('hidden');
+        showNextCheck();
+    }
+}
+
+function showNextPaper() {
     if(currentIndex >= dictationList.length) return showReport();
+    updateProgress();
     document.getElementById('answer-area').classList.add('hidden');
     document.getElementById('show-answer-btn').classList.remove('hidden');
-    document.getElementById('judge-buttons').classList.add('hidden');
-    document.getElementById('progress-tag').innerText = `${currentIndex + 1} / ${dictationList.length}`;
-    setTimeout(speakCurrentWord, 500);
-}
-
-function speakCurrentWord() {
-    speak(dictationList[currentIndex].word);
-}
-
-function speak(text) {
-    window.speechSynthesis.cancel();
-    const msg = new SpeechSynthesisUtterance(text);
-    msg.lang = 'zh-CN';
-    msg.rate = 0.7; // 听写语速稍慢
-    window.speechSynthesis.speak(msg);
+    document.getElementById('judge-btns').classList.add('hidden');
+    setTimeout(speakCurrentWord, 600);
 }
 
 function showAnswer() {
@@ -283,63 +348,130 @@ function showAnswer() {
     document.getElementById('correct-meaning').innerText = word.meaning;
     document.getElementById('answer-area').classList.remove('hidden');
     document.getElementById('show-answer-btn').classList.add('hidden');
-    document.getElementById('judge-buttons').classList.remove('hidden');
+    document.getElementById('judge-btns').classList.remove('hidden');
 }
 
 function handleResult(isRight) {
     const word = dictationList[currentIndex];
     if(isRight) {
-        sessionResults.correct++;
+        sessionStats.correct++;
     } else {
-        sessionResults.wrong++;
-        sessionResults.wrongWords.push(word.word);
-        if(!wrongBook.some(item => item.word === word.word)) {
-            wrongBook.push(word);
-            localStorage.setItem('wrongBook', JSON.stringify(wrongBook));
-        }
+        sessionStats.wrong++;
+        sessionStats.wrongWordObjects.push(word);
+        addToWrongBook(word);
     }
     currentIndex++;
-    showNextWord();
-    updateWrongCount();
+    showNextPaper();
+}
+
+function verifyCheckAnswer() {
+    const input = document.getElementById('check-input').value.trim();
+    const wordObj = dictationList[currentIndex];
+    const feedback = document.getElementById('check-feedback');
+    if(input === wordObj.word) {
+        feedback.innerText = "√ 正确！"; feedback.className = "h-8 mt-4 font-bold text-emerald-500 sans";
+        sessionStats.correct++;
+        setTimeout(() => { currentIndex++; showNextCheck(); }, 800);
+    } else {
+        feedback.innerText = `× 正确：${wordObj.word}`; feedback.className = "h-8 mt-4 font-bold text-rose-500 sans";
+        if(!sessionStats.wrongWordObjects.some(w => w.word === wordObj.word)) {
+            sessionStats.wrongWordObjects.push(wordObj);
+            sessionStats.wrong++;
+            addToWrongBook(wordObj);
+        }
+    }
+}
+
+function showNextCheck() {
+    if(currentIndex >= dictationList.length) return showReport();
+    document.getElementById('check-pinyin').innerText = dictationList[currentIndex].pinyin;
+    document.getElementById('check-input').value = "";
+    document.getElementById('check-feedback').innerText = "";
+    speakCurrentWord();
+}
+
+// --- 5. 辅助功能 (语音、进度、错词、勋章) ---
+function addToWrongBook(wordObj) {
+    if(!wrongBook.some(w => w.word === wordObj.word)) {
+        wrongBook.push(wordObj);
+        localStorage.setItem('wrongBook', JSON.stringify(wrongBook));
+        updateWrongCount();
+    }
+}
+
+function speakCurrentWord() {
+    const word = dictationList[currentIndex].word;
+    speak(word, 0.5, 1.1); // 第一次：极慢
+    setTimeout(() => speak(word, 0.4, 1.1), 2500); // 第二次：更慢，加强声调
+}
+
+function speak(text, rate = 0.6, pitch = 1) {
+    if(!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const msg = new SpeechSynthesisUtterance(text);
+    msg.lang = 'zh-CN';
+    msg.rate = rate; 
+    msg.pitch = pitch;
+    window.speechSynthesis.speak(msg);
+}
+
+function updateProgress() {
+    const p = ((currentIndex) / dictationList.length) * 100;
+    document.getElementById('progress-bar').style.width = p + '%';
+    document.getElementById('progress-text').innerText = `听写进度 ${currentIndex + 1} / ${dictationList.length}`;
 }
 
 function showReport() {
-    document.getElementById('dictation-section').classList.add('hidden');
-    document.getElementById('report-section').classList.remove('hidden');
-    const accuracy = Math.round((sessionResults.correct / dictationList.length) * 100);
-    document.getElementById('report-content').innerHTML = `
-        <p><strong>学生：</strong> ${currentUser}</p>
-        <p><strong>范围：</strong> ${currentLesson.lesson}</p>
-        <p><strong>正确：</strong> ${sessionResults.correct} / ${dictationList.length}</p>
-        <p><strong>正确率：</strong> <span class="text-2xl font-bold ${accuracy >= 80 ? 'text-green-600' : 'text-red-600'}">${accuracy}%</span></p>
-        ${sessionResults.wrongWords.length > 0 ? `<p class="mt-4 text-red-500">重点复习：${sessionResults.wrongWords.join('、')}</p>` : ''}
-    `;
-    updateStreak();
-}
-
-function updateStreak() {
-    let streakData = JSON.parse(localStorage.getItem('streakData') || '[]');
-    const today = new Date().toLocaleDateString();
-    if(!streakData.includes(today)) {
-        streakData.push(today);
-        localStorage.setItem('streakData', JSON.stringify(streakData));
-    }
-    if(streakData.length >= 4) document.getElementById('medal-area').classList.remove('hidden');
-}
-
-function showMenu() {
     document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
-    document.getElementById('menu-section').classList.remove('hidden');
+    document.getElementById('report-section').classList.remove('hidden');
+    const accuracy = Math.round((sessionStats.correct / dictationList.length) * 100);
+    
+    document.getElementById('report-header').innerHTML = `<h2 class="text-2xl font-bold kaiti">${currentUser} 的复习报告单</h2>`;
+    document.getElementById('report-stats').innerHTML = `
+        <div class="bg-emerald-50 p-4 rounded-2xl text-emerald-700 sans">
+            <div class="text-2xl font-bold">${sessionStats.correct}</div><div class="text-[10px]">正确</div>
+        </div>
+        <div class="bg-rose-50 p-4 rounded-2xl text-rose-700 sans">
+            <div class="text-2xl font-bold">${sessionStats.wrong}</div><div class="text-[10px]">错误</div>
+        </div>
+        <div class="bg-indigo-50 p-4 rounded-2xl text-indigo-700 sans">
+            <div class="text-2xl font-bold">${accuracy}%</div><div class="text-[10px]">正确率</div>
+        </div>
+    `;
+
+    const container = document.getElementById('wrong-tags-container');
+    const area = document.getElementById('wrong-list-area');
+    container.innerHTML = '';
+    if(sessionStats.wrongWordObjects.length > 0) {
+        area.classList.remove('hidden');
+        sessionStats.wrongWordObjects.forEach(obj => {
+            const span = document.createElement('div');
+            span.className = "wrong-tag kaiti";
+            span.innerHTML = `${obj.word} <span class="text-[10px] sans opacity-60">(${obj.pinyin})</span>`;
+            container.appendChild(span);
+        });
+    } else {
+        area.classList.add('hidden');
+    }
+    checkStreak();
 }
 
 function updateWrongCount() {
     document.getElementById('wrong-count').innerText = wrongBook.length;
 }
 
-function showWrongWords() {
-    if(wrongBook.length === 0) return;
-    currentLesson = { lesson: "错词强化库", words: wrongBook };
-    showBrowse(-1);
+function checkStreak() {
+    let streak = JSON.parse(localStorage.getItem('streakData') || '[]');
+    const today = new Date().toLocaleDateString();
+    if(!streak.includes(today)) streak.push(today);
+    localStorage.setItem('streakData', JSON.stringify(streak));
+    if(streak.length >= 4) document.getElementById('medal-area').classList.remove('hidden');
+}
+
+function showMenu() {
+    document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+    document.getElementById('menu-section').classList.remove('hidden');
+    window.scrollTo(0,0);
 }
 </script>
 </body>
